@@ -1,0 +1,403 @@
+---
+title: " ols"
+author: "dain"
+date: '2021 8 16 '
+output: html_document
+---
+
+```{r}
+#필요한 라이브러리
+library(data.table)
+library(carData)
+library(car)
+library(corrplot)
+library(magrittr)
+library(ggplot2)
+library(lmtest)
+library(AER)
+library(MASS)
+library(dplyr)
+library(sp)
+library(sf)
+library(tmap)
+library(RANN)
+library(spData)
+library(spdep)
+library(rgdal)
+library(RColorBrewer)
+library(leaflet)
+library(maptools)
+library(gvlma)
+library(tidyr)
+library(leaps)
+library(broom)
+library(rsq)
+library(gridExtra)
+library(spgwr)
+library(spatialreg)
+library(geojsonio)
+```
+
+
+
+```{r}
+gpclibPermit
+
+library(maptools)
+gpclibPermit
+```
+
+```{r}
+final_data <- st_read('D:/data/seoul_exam_re.geojson')
+colnames(final_data)
+head(final_data)
+str(final_data)
+
+#chr이라서 바꾼거임
+final_data$공공기관 <- as.numeric(final_data$공공기관)
+final_data$보육시설 <- as.numeric(final_data$보육시설)
+final_data$사회복지시 <- as.numeric(final_data$사회복지시)
+final_data$버스정류장 <- as.numeric(final_data$버스정류장)
+final_data$버스승하차 <- as.numeric(final_data$버스승하차)
+final_data$지하철.1km이내. <- as.numeric(final_data$지하철.1km이내.)
+final_data$지하철거리점수 <- as.numeric(final_data$지하철거리점수)
+final_data$승하차평균 <- as.numeric(final_data$승하차평균)
+final_data$구별총생활 <- as.numeric(final_data$구별총생활)
+final_data$구별총생활인구 <- as.numeric(final_data$구별총생활인구)
+final_data$상가수 <- as.numeric(final_data$상가수)
+final_data$어린이집개수 <- as.numeric(final_data$어린이집개수)
+
+str(final_data)
+```
+
+
+```{r}
+#변수별 na확인하는 함수
+apply(final_data,2,function(x) sum(is.na(x)))
+```
+
+
+```{r}
+final_data$상가수[is.na(final_data$상가수)] <- 0
+final_data$지하철거리점수[is.na(final_data$지하철거리점수)] <- 0  #이래도 되나
+final_data$어린이집개수[is.na(final_data$어린이집개수)] <- 0 
+sum(is.na(final_data))
+```
+
+
+```{r}
+#결측치 분포
+
+library(mice)
+library(VIM)
+
+aggr(final_data, cex.axis=.7, gap=3, ylab=c("Missing data","Pattern"))
+```
+
+
+
+```{r}
+str(final_data)  
+final_data_1 <- final_data %>% select (TOT_REG_CD, 버스정류장, 공공기관, 보육시설, 사회복지시, 어린이집개수, 버스승하차, 지하철.1km이내., 승하차평균, 지하철거리점수, 상가수, 구별총생활인구)
+```
+
+
+
+```{r}
+
+final_data_1$시설수 <- final_data_1$공공기관 + final_data_1$보육시설 + final_data_1$사회복지시+ final_data_1$어린이집개수
+head(final_data_1$시설수)
+
+```
+
+
+
+
+```{r}
+options(repr.plot.width = 10, repr.plot.height = 10)
+tmap_mode("plot")
+tmap_options(check.and.fix = TRUE)
+tm_shape(final_data_1) +tm_fill('구별총생활인구', style='pretty', palette='Reds') +tm_borders(alpha=.1)
+```
+
+
+
+
+
+```{r}
+##공간데이터로 바꾸기
+sp_data  <- as(final_data_1, 'Spatial')
+sp_data
+```
+
+
+```{r}
+##이웃(neighbours)정의
+
+w <- poly2nb(sp_data)
+w
+```
+
+
+
+```{r}
+# 격자별 이웃관계 시각화
+plot(sp_data, col='white', border='grey', lwd=0.1)
+xy <- coordinates(sp_data)
+
+plot(w, xy, col='red', lwd=0.1, add=TRUE)
+```
+
+
+
+
+```{r}
+##가중치행렬 생성 
+ww <- nb2listw(w, style='W') ## row-standardised matrix
+ww
+```
+
+
+
+
+#####moran's i 검정    (ols가 아닌, 공간모형을 사용해야 하는 이유)
+종속변수인 생활의 전역적 공간적 자기 상관성이 있는지 판단하기 위해 Moran's I 검정
+
+```{r}
+
+results <- moran.mc(final_data_1$구별총생활인구, ww, nsim=99) # nsim : # of permutations want to run
+results
+```
+Moran's I지수가 0.27435로 유의하게 나타나는 것을 볼 수 있음
+귀무가설 : 아무런 패턴이 존재하지 않는다.
+귀무가설 기각 => 자기상관성이 강하게 존재한다는 것을 의미
+
+
+
+
+#####LISA분석  - 왜 공간적 모델 중에서도 국지적 모델(GWR)을 써야 하는지에 대한 이유
+
+Moran's I는 전역적인 값이며, 보다 국지적으로 어떤 지역들이 서로 유사한 값들을 가지며 클러스터하고 있는지 분석하기 위해 국지적 자기상관성 LISA 분석을 실시
+
+```{r}
+tmap_mode('plot')
+tm_shape(final_data_1) + tm_fill('구별총생활인구', style='pretty', palette='RdPu') +tm_borders(alpha=.1) + tm_layout(main.title='유동인구count', main.title.size=0.5)
+```
+
+
+
+```{r}
+local_m <- localmoran(final_data_1$구별총생활인구, ww)
+summary(local_m)
+```
+
+
+
+
+```{r}
+final_data_1$s_구별총생활인구 <- scale(final_data_1$구별총생활인구) %>% as.vector()
+```
+
+```{r}
+# spatial lag 변수 생성 
+final_data_1$lag_s_구별총생활인구  <- lag.listw(ww,final_data_1$구별총생활인구)
+```
+
+```{r}
+summary(final_data_1$s_구별총생활인구)
+```
+```{r}
+summary(final_data_1$lag_s_구별총생활인구)
+```
+```{r}
+final_data_1 <- st_as_sf(final_data_1) %>% 
+    mutate(quad_sig = ifelse(final_data_1$s_구별총생활인구 > 0 &
+                            final_data_1$lag_s_구별총생활인구 > 0 &
+                            local_m[,5] <= 0.05,
+                            "high-high",
+                      ifelse(final_data_1$s_구별총생활인구 <= 0 &
+                            final_data_1$lag_s_구별총생활인구 <= 0 &
+                            local_m[,5] <= 0.05,
+                            "low-low",
+                      ifelse(final_data_1$s_구별총생활인구 > 0 &
+                            final_data_1$lag_s_구별총생활인구 <= 0 &
+                            local_m[,5] <= 0.05, 
+                            "high-low",
+                      ifelse(final_data_1$s_구별총생활인구 <= 0 &
+                            final_data_1$lag_s_구별총생활인구> 0 &
+                            local_m[,5] <= 0.05,
+                            "low-high", 
+                            "non-significant")))))
+```
+
+```{r}
+table(final_data_1$quad_sig)
+```
+
+```{r}
+nrow(local_m[local_m[,5] <= 0.05,])
+```
+```{r}
+qtm(final_data_1, fill='quad_sig', fill.title='LISA',
+   fill.palette = "-Reds", border='white')
+```
+
+Moran's i 는 전역적인 값이며, 보다 국지적으로 어떤 지역들이 서로 유사한 값들을 갖고 있는지 확인하기 위해
+국지적 자기상관성 LISA분석 실시
+
+전역적 : 공간적의존성
+국지적 : 공간적의존성 뿐만 아니라 공간적 이질성도 고려
+
+공간의존성 : 공간상의 한 지점에서 측정된 현상이 다른 지점에서의 측정값과 서로 관련이 있을 때 나타난
+
+공간이질성 : 각 지점이나 지역에 내재된 고유성에서 발생하게 되는 자료의 지리적 변이나 통계적 특성의 차이를 말한다
+
+
+공간가중행렬을 토대로 Moran's I 값을 분석
+-> 이를 통해 공간적 상관성 여부를 판단
+Moran's I 값은 1에 가까울수록 공간적 상관성이 큼
+0.27435으로 어느 수준의 공간적 자기 상관성이 존재함
+교통사고가 발생한 곳에 더욱 사고가 많이 발생하며 공간적 군집을 이루는 것 확인가능
+=> 이는 공간적자기상관성을 고려하는 공간회귀모형이 필요하다고 판단가능
+
+
+
+으아아아아ㅏㅇ 이제 써도 됨 ==========>인데  (전역적 공간회귀모형 vs 국지적 공간회귀모형)
+gwr은 이제 국지적 공간회귀모형임....) + 국지적은 : 공간적의존성 뿐만 아니라 공간적 이질성도 고려 가능
+
+
+
+
+
+
+
+#ols회귀분석
+
+```{r}
+colnames(final_data_1)
+```
+
+
+```{r}
+## 회귀분석에 쓸 컬럼만 데이터프레임으로 변환
+dat <- data.frame(final_data_1) %>% dplyr::select (버스정류장, 시설수, 버스승하차, 지하철.1km이내., 승하차평균, 지하철거리점수, 상가수, 구별총생활인구)
+colnames(dat)
+```
+
+
+```{r}
+## OLS식 구하기
+
+lm_ols1 <- lm(구별총생활인구 ~  . , data=dat)
+summary(lm_ols1)
+```
+
+R-squared는 결정계수를 의미하며,회귀모형의 설명력을 표현하는 용도로 사용
+P-value와 같이 0과 1 사이의 값으로 나타나는데, 0에 가까울수록 설명력이 낮고, 1에 가까울수록 높다고 해석.
+학계에서는 0.6이상, 마케팅조사 실무에서는 0.3이상이면 의미가 있다고 해석
+이 수치가 의미하는 것은 원인변수가 결과변수를 설명하는 정도로서 R Square가 0.5725라는 것은 원인변수들의 분산이 결과변수의 분산을 57%정도 설명한다는 뜻
+
+회귀분석(Regression Analysis)을 실시했을 때 이 R Squarer값이 0.4이상이 되지 않으면 나머지 지표들은 볼 필요도 없이 의미가 없는 것이므로 반드시 이 지표를 먼저 봐서 0.4이상인지를 확인하여야 함
+
+(현재 우리가 분석한 결과는 0.3077이니 유의미하다 볼 수 있음)  # distance 안하고 지하철거리점수로 한거임
+F 검정의 p-value가 0.05 미만일 때, 귀무가설 H0 는 기각되고,
+'Y는 X에 대한 회귀식으로 설명 가능하다'는 대립가설 H1이 채택되며,최종적으로 추정된 회귀식은 적합하다는 결론이 도출
+
+
+
+
+```{r}
+##다중공선성 확인
+vif(lm_ols1)
+```
+vif가 10이 넘어가면, 심각한 다중공선성이 있다고 판단합나다. 
+
+
+
+#### 가정 진단   
+ols의 기본 가정 4가지 (선형성, 오차항 독립성, 등분산성, 오차항 정규성)
+
+
+
+오차항의 모든 분산은 모든 관찰치에서 일정할 것 -> 이문제를 해결 못하면 이분산성 문제(Heteroscedasticity)가 발생
+
+이를 브루쉬 파간 검정 (Breusch-Pagan test, BP 검정) 을 통해 알 수 있다.
+
+- p-value ≥ 0.05 ⇒ 동분산성 Homoskedasticity
+- p-value < 0.05 ⇒ 이분산성 Heteroskedasticity
+
+
+```{r}
+bptest(lm_ols1) ##등분산이라는 귀무가설을 기각하므로, 이분산성이 있다고 판단
+```
+
+```{r}
+##정규성
+qqnorm(lm_ols1$residuals)
+```
+=> 정규성 가정 위배
+
+
+
+```{r}
+##독립성
+plot(resid(lm_ols1))
+```
+=> 등분산성(오차항의 모든 분산은 모든 관찰치에서 일정할 것)  가정 위배
+
+이분산성 문제를 가지고 있다는 것으로 해석할 수 있으며 즉, 위 모델이 분석에 적합하지 않다
+
+
+
+```{r}
+dwtest(lm_ols1)
+```
+
+=> 독립성 가정 위배
+====> 오차항 사이 상관이 있음 
+
+
+
+
+```{r}
+#공간데이터로 변환
+final_sp <- as(final_data, "Spatial")
+```
+
+```{r}
+##이웃 정의
+w <- poly2nb(final_sp)
+w
+```
+
+
+```{r}
+##공간가중치행렬 만들기
+wm <- nb2mat(w, style='W')
+rwm <- mat2listw(wm, style='W')
+```
+
+```{r}
+options("scipen" = 100) 
+lm.morantest(lm_ols1, rwm, alternative="two.sided")
+```
+
+일반회귀모형 잔차의 분포가 공간적 자기상관성을 띄는지 검정
+Moran's i 지수가 0.17이며 유의수준0.05수준에서 기각
+
+
+
+=> 그러므로 GWR 시작
+
+
+
+
+```{r}
+
+
+
+
+
+
+```
+
