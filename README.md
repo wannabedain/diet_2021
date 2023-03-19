@@ -1,7 +1,7 @@
 
 
 <!-- ABOUT THE PROJECT -->
-## 행정 효율화를 위한  
+## 서울시 빅데이터 기반 도로 다이어트 권장 지역 모델을 통한 행정 효율화 및 보행 도시 실현 
 
 
 <!-- GETTING STARTED -->
@@ -12,5 +12,6 @@
 ### 추진 배경
 <img width="1206" alt="스크린샷 2023-03-19 오후 12 06 20" src="https://user-images.githubusercontent.com/91936267/226151595-c289902d-18a9-43e7-a2b8-dec04485ecd2.png">
 
-### 
+### 분석 흐름도
+<img width="822" alt="스크린샷 2023-03-19 오후 12 15 23" src="https://user-images.githubusercontent.com/91936267/226151648-6f77095c-5e75-4076-aa86-6c0b8c1a34f2.png">
 
