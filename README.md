@@ -13,5 +13,5 @@
 <img width="1206" alt="스크린샷 2023-03-19 오후 12 06 20" src="https://user-images.githubusercontent.com/91936267/226151595-c289902d-18a9-43e7-a2b8-dec04485ecd2.png">
 
 ### 분석 흐름도
-<img width="822" alt="스크린샷 2023-03-19 오후 12 15 23" src="https://user-images.githubusercontent.com/91936267/226151648-6f77095c-5e75-4076-aa86-6c0b8c1a34f2.png">
+<img width="822" alt="스크린샷 2023-03-19 오후 12 15 23" src="https://user-images.githubusercontent.com/91936267/226151671-55fbbb10-fdbc-4605-b8e6-a3c7ae752cb7.png">
 
