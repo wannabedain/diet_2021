@@ -1,4 +1,4 @@
-# diet_2021
+
 
 
 <!-- TABLE OF CONTENTS -->
@@ -47,7 +47,8 @@ Use the `BLANK_README.md` to get started.
 
 
 <!-- GETTING STARTED -->
-## Getting Started
+## Gett<img width="1202" alt="스크린샷 2023-03-19 오후 12 06 49" src="https://user-images.githubusercontent.com/91936267/226151480-f5557b0b-d076-4493-a0e2-7bc1e9b8e8aa.png">
+ing Started
 
 This is an example of how you may give instructions on setting up your project locally.
 To get a local copy up and running follow these simple example steps.
